@@ -1,5 +1,6 @@
 import {
 	AbsoluteFill,
+	Audio,
 	Img,
 	interpolate,
 	interpolateColors,
@@ -173,6 +174,8 @@ export const Showreel: React.FC = () => {
 	});
 	return (
 		<AbsoluteFill>
+			{/* 120BPM 배경음악 (scripts/make-bgm.mjs로 생성). 박 = 15프레임 그리드와 0프레임에서 정렬 */}
+			<Audio src={staticFile('bgm.wav')} />
 			<Background frame={frame} />
 			{/* 흔들릴 때 가장자리가 비지 않도록 배경을 한 번 더 깔고 그 위를 통째로 흔든다 */}
 			<AbsoluteFill

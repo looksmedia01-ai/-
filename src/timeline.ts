@@ -1,37 +1,64 @@
 import {Easing, interpolate} from 'remotion';
 
 export const FPS = 30;
-export const DURATION = 17 * FPS; // 510 frames
+
+// ── 박자 그리드: 120BPM → 1박 = 0.5초 = 15프레임, 1마디(4/4) = 60프레임
+export const BPM = 120;
+export const BEAT = (FPS * 60) / BPM; // 15
+export const BAR = BEAT * 4; // 60
+export const beats = (n: number) => n * BEAT;
 
 export type Expression = 'neutral' | 'happy' | 'surprised' | 'laugh' | 'curious';
 
 export type Scene = {
-	from: number;
 	label: string;
+	beats: number; // 장면 길이(박). 4의 배수면 다음 컷이 마디 첫 박에 떨어진다
 	bg: [string, string];
+	from: number; // 시작 프레임 (beats 누적으로 자동 계산)
 };
 
-// 장면 구성 (프레임 기준, 30fps)
-export const SCENES: Scene[] = [
-	{from: 0, label: 'HELLO', bg: ['#FFF4E0', '#FFD9A8']},
-	{from: 75, label: 'HAPPY', bg: ['#FFE6F0', '#FFB8D2']},
-	{from: 165, label: 'SURPRISE!', bg: ['#FFF7C2', '#FFC94D']},
-	{from: 255, label: 'HAHAHA', bg: ['#E3FFF3', '#8FE8C4']},
-	{from: 345, label: 'HMM?', bg: ['#EEE8FF', '#BFAEFF']},
-	{from: 435, label: 'TA-DA!', bg: ['#E3F2FF', '#8EC8FF']},
+// 장면 길이를 박 단위로 정의: 4+8+4+8+4+6 = 34박 = 17초
+// 컷은 전부 마디 첫 박(60프레임 배수), 피날레 착지도 마디 첫 박(480)에 떨어진다
+const SCENE_DEFS: Omit<Scene, 'from'>[] = [
+	{label: 'HELLO', beats: 4, bg: ['#FFF4E0', '#FFD9A8']},
+	{label: 'HAPPY', beats: 8, bg: ['#FFE6F0', '#FFB8D2']},
+	{label: 'SURPRISE!', beats: 4, bg: ['#FFF7C2', '#FFC94D']},
+	{label: 'HAHAHA', beats: 8, bg: ['#E3FFF3', '#8FE8C4']},
+	{label: 'HMM?', beats: 4, bg: ['#EEE8FF', '#BFAEFF']},
+	{label: 'TA-DA!', beats: 6, bg: ['#E3F2FF', '#8EC8FF']},
 ];
 
-// 표정 교체 시점: 대부분 스쿼시(눌림) 순간이나 공중에서 갈아 끼워 컷이 튀지 않게 한다
+export const SCENES: Scene[] = SCENE_DEFS.reduce<Scene[]>((acc, s) => {
+	const prev = acc[acc.length - 1];
+	acc.push({...s, from: prev ? prev.from + beats(prev.beats) : 0});
+	return acc;
+}, []);
+
+export const DURATION = SCENES.reduce((sum, s) => sum + beats(s.beats), 0); // 510
+
+// 장면 시작 프레임 이름표 (효과·연기에서 공용)
+export const S = {
+	hello: SCENES[0].from, // 0
+	happy: SCENES[1].from, // 60
+	surprise: SCENES[2].from, // 180
+	laugh: SCENES[3].from, // 240
+	hmm: SCENES[4].from, // 360
+	tada: SCENES[5].from, // 420
+};
+// 피날레 착지 = 마지막 마디 첫 박
+export const FINALE_HIT = S.tada + beats(4); // 480
+
+// 표정 교체 시점: 컷(마디 첫 박) 또는 착지 박에 맞춤
 const EXPRESSIONS: [number, Expression][] = [
 	[0, 'neutral'],
-	[61, 'happy'], // 인사하며 눈웃음 깜빡
-	[65, 'neutral'],
-	[75, 'happy'],
-	[165, 'surprised'],
-	[255, 'laugh'],
-	[345, 'curious'],
-	[435, 'neutral'],
-	[461, 'happy'],
+	[S.hello + 44, 'happy'], // 인사하며 눈웃음 깜빡
+	[S.hello + 48, 'neutral'],
+	[S.happy, 'happy'],
+	[S.surprise, 'surprised'],
+	[S.laugh, 'laugh'],
+	[S.hmm, 'curious'],
+	[S.tada, 'neutral'],
+	[FINALE_HIT, 'happy'],
 ];
 
 export const expressionAt = (f: number): Expression => {
@@ -81,61 +108,64 @@ export type Pose = {
 	spin?: number; // 공중회전(deg), 몸 중심 회전
 };
 
-// 장면별 연기
+const B = BEAT;
+
+// 장면별 연기 (t = 장면 내 프레임, 키프레임은 가능한 한 박(B의 배수)에 착지·컷을 둔다)
 const acting = (f: number): Pose => {
-	// ── 1. HELLO: 위에서 떨어져 착지 → 작은 튕김 → 인사 기울이기
-	if (f < 75) {
+	// ── 1. HELLO (4박): 떨어져 2박째에 착지 → 3박째에 한 번 더 튕겨 착지 → 4박째 인사 기울이기
+	if (f < S.happy) {
+		const t = f - S.hello;
 		return {
 			x: 0,
-			y: track(f, [
+			y: track(t, [
 				[0, -1100],
-				[14, 0, fallIn],
-				[21, 0],
-				[29, -95, riseOut],
-				[37, 0, fallIn],
+				[B, 0, fallIn], // 착지: 2박
+				[B + 5, 0],
+				[B + 10, -80, riseOut],
+				[2 * B, 0, fallIn], // 착지: 3박
 			]),
-			stretch: track(f, [
+			stretch: track(t, [
 				[0, 1.32],
-				[13, 1.3],
-				[16, 0.66, snap],
-				[22, 1.14, snap],
-				[29, 1.0],
-				[36, 1.06],
-				[39, 0.84, snap],
-				[48, 1.0, overshoot],
-				[56, 1.0],
-				[60, 0.94],
-				[66, 1.04],
-				[72, 1.0],
+				[B - 1, 1.3],
+				[B + 2, 0.66, snap],
+				[B + 6, 1.12, snap],
+				[B + 10, 1.0],
+				[2 * B - 1, 1.05],
+				[2 * B + 2, 0.84, snap],
+				[2 * B + 10, 1.0, overshoot],
+				[3 * B + 6, 1.0],
+				[3 * B + 10, 0.94],
+				[4 * B, 1.0],
 			]),
-			rot: track(f, [
+			rot: track(t, [
 				[0, 0],
-				[48, 0],
-				[58, -8],
-				[66, 5],
-				[75, 0],
+				[2 * B + 8, 0],
+				[3 * B + 1, -8], // 4박째 인사
+				[3 * B + 8, 5],
+				[4 * B, 0],
 			]),
 		};
 	}
 
-	// ── 2. HAPPY: 눌렸다 튀어오르며 좌우로 흔들흔들 깡충
-	if (f < 165) {
-		const t = f - 75;
+	// ── 2. HAPPY (8박): 컷에 팝 → 매 박마다 좌우로 흔들며 깡충(착지가 박에 떨어짐)
+	if (f < S.surprise) {
+		const t = f - S.happy;
 		const pop = track(t, [
 			[0, 1],
 			[4, 0.84, snap],
 			[10, 1.1, snap],
-			[16, 1.0],
+			[B, 1.0],
 		]);
-		const env = clamp01((t - 14) / 8) * clamp01((80 - t) / 8);
-		const phase = ((t - 14) / 32) * Math.PI * 2;
+		const env = clamp01((t - B) / 6) * clamp01((7 * B - t) / 6);
+		// 주기 2박: |sin|=0(바닥 접촉)이 B, 2B, 3B …에 온다
+		const phase = ((t - B) / (2 * B)) * Math.PI * 2;
 		const s = Math.sin(phase);
-		const contact = Math.pow(1 - Math.abs(s), 6); // 바닥에 닿는 순간 1
-		// 마지막에 놀라기 직전 살짝 웅크림(예비동작)
+		const contact = Math.pow(1 - Math.abs(s), 6);
+		// 놀라기 직전 마지막 박에서 웅크림(예비동작)
 		const antic = track(t, [
 			[0, 1],
-			[82, 1],
-			[90, 0.9, Easing.in(Easing.quad)],
+			[7 * B, 1],
+			[8 * B, 0.9, Easing.in(Easing.quad)],
 		]);
 		return {
 			x: 6 * s * env,
@@ -145,61 +175,60 @@ const acting = (f: number): Pose => {
 		};
 	}
 
-	// ── 3. SURPRISE: 화들짝 늘어나며 점프 → 공중에서 덜덜 → 착지 후 뒤로 젖힘
-	if (f < 255) {
-		const t = f - 165;
-		const trembleAir = t > 5 && t < 24 ? 1 : 0;
-		const shiver = clamp01((t - 42) / 4) * clamp01((86 - t) / 10);
+	// ── 3. SURPRISE (4박): 컷(1박)에 화들짝 점프 → 2박째 착지 → 뒤로 젖히고 덜덜
+	if (f < S.laugh) {
+		const t = f - S.surprise;
+		const trembleAir = t > 4 && t < B - 2 ? 1 : 0;
+		const shiver = clamp01((t - 24) / 4) * clamp01((56 - t) / 8);
 		return {
 			x: trembleAir * 6 * Math.sin(t * 2.9) + shiver * 2.5 * Math.sin(t * 3.7),
 			y: track(t, [
 				[0, 0],
-				[6, -120, riseOut],
-				[22, -132],
-				[33, 0, fallIn],
+				[5, -120, riseOut],
+				[11, -130],
+				[B, 0, fallIn], // 착지: 2박
 			]),
 			stretch: track(t, [
 				[0, 0.9],
-				[5, 1.4, snap],
-				[22, 1.3],
-				[32, 1.22],
-				[35, 0.82, snap],
-				[43, 1.06, snap],
-				[50, 1.0],
-				[80, 1.02],
-				[90, 0.88, Easing.in(Easing.quad)],
+				[4, 1.4, snap],
+				[11, 1.3],
+				[B - 1, 1.22],
+				[B + 2, 0.82, snap],
+				[B + 8, 1.06, snap],
+				[2 * B - 2, 1.0],
+				[3 * B + 7, 1.02],
+				[4 * B, 0.88, Easing.in(Easing.quad)],
 			]),
 			rot:
 				track(t, [
 					[0, 0],
-					[6, 3],
-					[22, -3],
-					[33, 0],
-					[44, -7, overshoot],
-					[80, -6],
-					[90, 0],
+					[5, 3],
+					[12, -3],
+					[B, 0],
+					[B + 9, -7, overshoot],
+					[3 * B + 7, -6],
+					[4 * B, 0],
 				]) + shiver * 1.2 * Math.sin(t * 4.3),
 		};
 	}
 
-	// ── 4. HAHAHA: 깡충깡충 4번 + 좌우 흔들 → 뒤로 젖히고 킥킥
-	if (f < 345) {
-		const t = f - 255;
-		if (t < 72) {
-			const period = 18;
-			const p = (t % period) / period;
+	// ── 4. HAHAHA (8박): 박마다 깡충 6번 → 7~8박 뒤로 젖히고 킥킥
+	if (f < S.hmm) {
+		const t = f - S.laugh;
+		if (t < 6 * B) {
+			const p = (t % B) / B; // 매 박 시작 = 착지
 			const air = 4 * p * (1 - p);
 			const toContact = Math.min(p, 1 - p);
-			const squash = Math.exp(-Math.pow(toContact / 0.07, 2));
-			const height = [70, 90, 80, 110][Math.floor(t / period)];
+			const squash = Math.exp(-Math.pow(toContact / 0.08, 2));
+			const height = [60, 75, 65, 85, 70, 105][Math.floor(t / B)];
 			return {
 				x: 0,
 				y: -height * air,
 				stretch: 1 + 0.14 * Math.abs(1 - 2 * p) * (1 - squash) - 0.24 * squash,
-				rot: 8 * Math.sin((Math.PI * t) / period),
+				rot: 8 * Math.sin((Math.PI * t) / B),
 			};
 		}
-		const u = t - 72;
+		const u = t - 6 * B;
 		const giggle = clamp01(u / 3);
 		return {
 			x: 0,
@@ -218,72 +247,79 @@ const acting = (f: number): Pose => {
 		};
 	}
 
-	// ── 5. HMM?: 오른쪽 위를 보며 목을 쭉 빼고 기울임 → "음?" 갸웃 → 크게 웅크려 점프 준비
-	if (f < 435) {
-		const t = f - 345;
-		const hold = clamp01((t - 22) / 6) * clamp01((70 - t) / 6);
+	// ── 5. HMM? (4박): 1박에 오른쪽 위로 목을 쭉 → 2·3박 갸웃 → 4박 크게 웅크림
+	if (f < S.tada) {
+		const t = f - S.hmm;
+		const hold = clamp01((t - 12) / 4) * clamp01((44 - t) / 4);
 		return {
 			x: track(t, [
 				[0, 0],
-				[24, 55],
-				[68, 55],
-				[84, 0],
+				[B, 55],
+				[3 * B, 55],
+				[3 * B + 11, 0],
 			]),
-			y: track(t, [
-				[0, 0],
-				[24, -18],
-				[68, -18],
-				[78, 0],
-			]) - hold * 5 * Math.sin(t * 0.35),
+			y:
+				track(t, [
+					[0, 0],
+					[B, -18],
+					[3 * B, -18],
+					[3 * B + 5, 0],
+				]) - hold * 5 * Math.sin(t * 0.42),
 			stretch: track(t, [
 				[0, 0.94],
-				[24, 1.17],
-				[44, 1.15],
-				[50, 1.12],
-				[56, 1.17],
-				[70, 1.15],
-				[78, 1.0],
-				[88, 0.7, Easing.in(Easing.quad)],
-				[90, 0.7],
+				[B, 1.17],
+				[2 * B - 6, 1.15],
+				[2 * B, 1.12],
+				[2 * B + 5, 1.17],
+				[3 * B, 1.15],
+				[3 * B + 5, 1.0],
+				[4 * B - 2, 0.7, Easing.in(Easing.quad)],
+				[4 * B, 0.7],
 			]),
 			rot: track(t, [
 				[0, -7],
-				[24, 11, overshoot],
-				[44, 11],
-				[50, 4],
-				[56, 13, overshoot],
-				[70, 12],
-				[82, 0],
+				[B, 11, overshoot],
+				[2 * B - 6, 11],
+				[2 * B, 4], // 3박째 갸웃
+				[2 * B + 6, 13, overshoot],
+				[3 * B, 12],
+				[3 * B + 10, 0],
 			]),
 		};
 	}
 
-	// ── 6. TA-DA!: 크게 점프하며 공중 한 바퀴 → 쾅 착지 → 출렁 → 마무리 포즈
-	const t = f - 435;
+	// ── 6. TA-DA! (6박): 1·2박 "준비, 준비" 움찔 → 3박 도약 → 5박(마디 첫 박) 쾅 착지 → 출렁
+	const t = f - S.tada;
+	const land = 4 * B; // = FINALE_HIT - S.tada
 	return {
 		x: 0,
 		y: track(t, [
 			[0, 0],
-			[13, -400, riseOut],
-			[26, 0, fallIn],
+			[2 * B, 0],
+			[3 * B, -400, riseOut],
+			[land, 0, fallIn],
 		]),
 		stretch: track(t, [
 			[0, 0.7],
-			[4, 1.45, snap],
-			[12, 1.08],
-			[18, 1.0],
-			[24, 1.22],
-			[27, 0.6, snap],
-			[34, 1.14, snap],
-			[41, 0.95],
-			[48, 1.02],
-			[54, 1.0],
+			[7, 0.86],
+			[B, 0.72, snap], // 2박 움찔
+			[B + 7, 0.84],
+			[2 * B, 0.66, snap], // 3박 도약 직전
+			[2 * B + 4, 1.45, snap],
+			[2 * B + 12, 1.08],
+			[3 * B + 3, 1.0],
+			[land - 2, 1.22],
+			[land + 1, 0.6, snap],
+			[land + 8, 1.14, snap],
+			[land + 15, 0.95],
+			[land + 22, 1.02],
+			[land + 28, 1.0],
 		]),
 		rot: 0,
 		spin: track(t, [
 			[0, 0],
-			[3, 0],
-			[23, -360, Easing.inOut(Easing.cubic)],
+			[2 * B + 3, 0],
+			[land - 3, -360, Easing.inOut(Easing.cubic)],
 		]),
 	};
 };

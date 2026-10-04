@@ -7,7 +7,8 @@
     "dev": "remotion studio",
     "render": "remotion render Showreel out/showreel.mp4",
     "still": "remotion still Showreel out/still.png --frame=60",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "bgm": "node scripts/make-bgm.mjs"
   },
   "dependencies": {
     "@remotion/cli": "^4.0.532",

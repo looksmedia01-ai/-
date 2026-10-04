@@ -1,5 +1,5 @@
 import {Easing, interpolate} from 'remotion';
-import {poseAt} from './timeline';
+import {BEAT as B, FINALE_HIT, S, poseAt} from './timeline';
 
 // 모든 효과는 Math.random 없이 (프레임, 파티클 번호)만으로 계산한다.
 // 같은 프레임은 언제 렌더해도 같은 그림이 나온다.
@@ -19,17 +19,14 @@ const window01 = (f: number, from: number, to: number, fade = 6) =>
 
 /* ───────────────────────── 화면 흔들림 ───────────────────────── */
 
-// [시작 프레임, 세기(px)] — 착지·놀람 순간에 맞춤
+// [시작 프레임, 세기(px)] — 전부 박 위(15프레임 배수)의 착지·놀람 순간
 const IMPACTS: [number, number][] = [
-	[14, 22], // HELLO 첫 착지
-	[37, 9], // HELLO 두 번째 착지
-	[170, 14], // 화들짝
-	[198, 10], // 놀람 점프 후 착지
-	[273, 5], // 깡충 착지들
-	[291, 5],
-	[309, 5],
-	[327, 7],
-	[461, 30], // 피날레 쾅
+	[S.hello + B, 22], // HELLO 첫 착지 (2박)
+	[S.hello + 2 * B, 9], // HELLO 두 번째 착지 (3박)
+	[S.surprise, 14], // 화들짝 (마디 첫 박 컷)
+	[S.surprise + B, 10], // 놀람 점프 후 착지
+	...[4, 5, 4, 6, 5, 8].map((amp, k): [number, number] => [S.laugh + (k + 1) * B, amp]), // 깡충 착지들
+	[FINALE_HIT, 30], // 피날레 쾅 (마디 첫 박)
 ];
 
 export const shakeAt = (f: number) => {
@@ -50,8 +47,8 @@ export const shakeAt = (f: number) => {
 /* ───────────────────────── 집중선 (SURPRISE) ───────────────────────── */
 
 export const FocusLines: React.FC<{frame: number}> = ({frame}) => {
-	const t = frame - 165;
-	const env = window01(t, 2, 46, 5);
+	const t = frame - S.surprise;
+	const env = window01(t, 1, 2 * B + 4, 5);
 	if (env <= 0) return null;
 	const N = 72;
 	const cx = 960;
@@ -90,13 +87,13 @@ const CLOUD_PUFFS: [number, number, number][] = [
 ];
 
 export const RainCloud: React.FC<{frame: number}> = ({frame}) => {
-	const t = frame - 345;
-	if (t < 0 || t > 92) return null;
+	const t = frame - S.hmm;
+	if (t < 0 || t > 4 * B + 2) return null;
 	const cx =
-		interpolate(t, [0, 22], [2250, 1500], {...clamp, easing: Easing.out(Easing.cubic)}) +
-		interpolate(t, [76, 92], [0, 800], {...clamp, easing: Easing.in(Easing.cubic)});
+		interpolate(t, [0, 12], [2250, 1500], {...clamp, easing: Easing.out(Easing.cubic)}) +
+		interpolate(t, [3 * B + 3, 4 * B + 2], [0, 800], {...clamp, easing: Easing.in(Easing.cubic)});
 	const cy = 190 + 7 * Math.sin(t * 0.22);
-	const rain = window01(t, 16, 84, 6);
+	const rain = window01(t, 8, 3 * B + 9, 5);
 	const bottom = cy + 80;
 	const ground = 905;
 	const fall = ground - bottom;
@@ -156,16 +153,17 @@ export const RainCloud: React.FC<{frame: number}> = ({frame}) => {
 /* ───────────────────────── Zzz (HAPPY) ───────────────────────── */
 
 export const Zzz: React.FC<{frame: number}> = ({frame}) => {
-	const t = frame - 75;
-	if (t < 14 || t > 92) return null;
+	const t = frame - S.happy;
+	if (t < B || t > 8 * B) return null;
 	const pose = poseAt(frame);
 	// 두 캐릭터 머리 사이 위쪽에서 피어오른다 (몸을 따라 움직임)
 	const ax = 960 + pose.x + 170;
 	const ay = 900 + pose.y - 540 * pose.stretch;
 	const LIFE = 42;
 	const items = [];
-	for (let k = 0; k * 14 + 14 <= 80; k++) {
-		const born = 14 + k * 14;
+	// 2박째부터 매 박마다 Z 하나씩
+	for (let k = 0; B + k * B <= 6 * B; k++) {
+		const born = B + k * B;
 		const a = t - born;
 		if (a < 0 || a > LIFE) continue;
 		const p = a / LIFE;
@@ -199,7 +197,7 @@ export const Zzz: React.FC<{frame: number}> = ({frame}) => {
 const CONFETTI_COLORS = ['#FF5D73', '#FFC93C', '#3CC8FF', '#6BE08A', '#B07CFF', '#FF8A3D'];
 
 export const Confetti: React.FC<{frame: number}> = ({frame}) => {
-	const a0 = frame - 461; // 피날레 착지 순간 발사
+	const a0 = frame - FINALE_HIT; // 피날레 착지(마디 첫 박) 순간 발사
 	if (a0 < 0) return null;
 	const N = 150;
 	return (
@@ -256,15 +254,15 @@ const Drop: React.FC<{
 
 // 웃음 눈물: 양쪽 눈꼬리에서 바깥으로 포물선을 그리며 뿜어져 나온다
 const tears = (f: number) => {
-	const t = f - 255;
-	if (t < 2 || t > 92) return [];
+	const t = f - S.laugh;
+	if (t < 2 || t > 8 * B - 2) return [];
 	const EYES = [
 		{x: 262, y: 585, dir: -1},
 		{x: 1252, y: 590, dir: 1},
 	];
 	const LIFE = 16;
 	const out = [];
-	for (let k = 0; k * 3 + 2 <= 86; k++) {
+	for (let k = 0; k * 3 + 2 <= 8 * B - 18; k++) {
 		const born = 2 + k * 3;
 		const a = t - born;
 		if (a < 0 || a > LIFE) continue;
@@ -292,9 +290,9 @@ const tears = (f: number) => {
 
 // 땀방울: 톡 튀어나와 관자놀이를 타고 천천히 흘러내린다
 const SWEAT: {from: number; to: number; x: number; y: number}[] = [
-	{from: 201, to: 252, x: 210, y: 420}, // 놀람 착지 후 회색
-	{from: 205, to: 252, x: 1330, y: 460}, // 놀람 착지 후 파랑
-	{from: 389, to: 428, x: 1335, y: 440}, // HMM? 갸웃할 때 파랑
+	{from: S.surprise + B + 1, to: S.surprise + 4 * B - 2, x: 210, y: 420}, // 놀람 착지 후 회색
+	{from: S.surprise + B + 4, to: S.surprise + 4 * B - 2, x: 1330, y: 460}, // 놀람 착지 후 파랑
+	{from: S.hmm + 2 * B, to: S.hmm + 4 * B - 2, x: 1335, y: 440}, // HMM? 갸웃할 때 파랑
 ];
 
 const sweat = (f: number) =>
