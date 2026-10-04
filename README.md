@@ -17,6 +17,22 @@ npm run dev      # Remotion Studio 미리보기
 npm run render   # out/showreel.mp4
 ```
 
+## 효과 (`src/effects.tsx`, 랜덤 없이 프레임 기준)
+
+| 장면 | 효과 |
+|------|------|
+| 1 HELLO | 착지 순간 화면 흔들림 |
+| 2 HAPPY | Zzz가 머리 위로 피어오름 |
+| 3 SURPRISE! | 집중선(2프레임마다 지글거림) + 화면 흔들림 + 착지 후 땀방울 |
+| 4 HAHAHA | 눈꼬리에서 웃음 눈물이 포물선으로 뿜어짐 + 착지마다 약한 흔들림 |
+| 5 HMM? | 비구름이 들어와 비를 뿌림(땅에 물튀김) + 갸웃할 때 땀방울 |
+| 6 TA-DA! | 착지 순간 양쪽 아래에서 색종이 발사 + 강한 화면 흔들림 |
+
+- 파티클 값은 `spread(i, salt)` 결정적 해시로만 정한다(`Math.random` 없음). 같은 프레임은 몇 번 렌더해도 같은 결과.
+- 흔들림 타이밍·세기: `IMPACTS`, 땀방울 위치·구간: `SWEAT`. 눈물·땀방울은 캐릭터 레이어 안에 있어서 몸과 같이 늘어나고 기운다.
+
+## 수정 포인트
+
 - 연기 키프레임: `src/timeline.ts` (`acting()` — 장면별 x / y / stretch / rot / spin)
 - 표정 교체 시점: `src/timeline.ts`의 `EXPRESSIONS`
 - 가로 스케일은 부피 보존으로 자동 계산(`sx = 1 + (1 - stretch) * 0.8`), 기울기는 발밑 기준, 공중회전은 몸 중심 기준

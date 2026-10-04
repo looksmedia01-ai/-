@@ -16,6 +16,7 @@ import {
 	poseAt,
 	sceneIndexAt,
 } from './timeline';
+import {CharacterFx, Confetti, FocusLines, RainCloud, Zzz, shakeAt} from './effects';
 
 // 원본 PNG 크기와, 표정마다 살짝 다른 캐릭터 위치(불투명 영역의 중앙·바닥)
 const SRC_W = 1448;
@@ -156,6 +157,7 @@ const Character: React.FC<{frame: number}> = ({frame}) => {
 						/>
 					);
 				})}
+				<CharacterFx frame={frame} width={CHAR_W} height={CHAR_H} />
 				</div>
 			</div>
 		</>
@@ -164,6 +166,7 @@ const Character: React.FC<{frame: number}> = ({frame}) => {
 
 export const Showreel: React.FC = () => {
 	const frame = useCurrentFrame();
+	const shake = shakeAt(frame);
 	const fadeIn = interpolate(frame, [0, 6], [1, 0], {extrapolateRight: 'clamp'});
 	const fadeOut = interpolate(frame, [DURATION - 8, DURATION - 1], [0, 1], {
 		extrapolateLeft: 'clamp',
@@ -171,7 +174,21 @@ export const Showreel: React.FC = () => {
 	return (
 		<AbsoluteFill>
 			<Background frame={frame} />
-			<Character frame={frame} />
+			{/* 흔들릴 때 가장자리가 비지 않도록 배경을 한 번 더 깔고 그 위를 통째로 흔든다 */}
+			<AbsoluteFill
+				style={{
+					transform: `translate(${shake.x}px, ${shake.y}px) rotate(${shake.rot}deg) scale(${
+						1 + Math.min(0.04, Math.hypot(shake.x, shake.y) / 600)
+					})`,
+				}}
+			>
+				<Background frame={frame} />
+				<FocusLines frame={frame} />
+				<RainCloud frame={frame} />
+				<Character frame={frame} />
+				<Zzz frame={frame} />
+				<Confetti frame={frame} />
+			</AbsoluteFill>
 			<Label frame={frame} />
 			<AbsoluteFill style={{background: '#fff', opacity: Math.max(fadeIn, fadeOut)}} />
 		</AbsoluteFill>
