@@ -1,0 +1,22 @@
+{
+  "name": "mascot-showreel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "17-second Remotion showreel: expression swaps + squash/stretch body acting",
+  "scripts": {
+    "dev": "remotion studio",
+    "render": "remotion render Showreel out/showreel.mp4",
+    "still": "remotion still Showreel out/still.png --frame=60",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.0.532",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "remotion": "^4.0.532"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "typescript": "^7.0.2"
+  }
+}
