@@ -11,6 +11,7 @@
     "bgm": "node scripts/make-bgm.mjs"
   },
   "dependencies": {
+    "@fontsource/jua": "^5.3.0",
     "@remotion/cli": "^4.0.532",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",

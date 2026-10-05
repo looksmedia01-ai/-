@@ -1,6 +1,8 @@
 import {
 	AbsoluteFill,
 	Audio,
+	continueRender,
+	delayRender,
 	Img,
 	interpolate,
 	interpolateColors,
@@ -16,12 +18,21 @@ import {
 	expressionAt,
 	poseAt,
 	sceneIndexAt,
+	FINALE_HIT,
 } from './timeline';
 import {CharacterFx, Confetti, FocusLines, RainCloud, Zzz, shakeAt} from './effects';
+import {CENTER_X, CHAR_H, CHAR_W, GROUND_Y, K} from './layout';
+import '@fontsource/jua/korean-400.css';
+import '@fontsource/jua/latin-400.css';
 
-// 원본 PNG 크기와, 표정마다 살짝 다른 캐릭터 위치(불투명 영역의 중앙·바닥)
-const SRC_W = 1448;
-const SRC_H = 1086;
+// 한글 이름표 폰트(Jua)가 로드될 때까지 렌더를 기다린다
+const fontHandle = delayRender('Jua 폰트 로딩');
+document.fonts
+	.load('400 80px Jua', '기본눈감음놀람웃음옆눈질울상땀0123456789')
+	.then(() => continueRender(fontHandle))
+	.catch(() => continueRender(fontHandle));
+
+// 표정마다 살짝 다른 캐릭터 위치(원본 PNG에서 불투명 영역의 중앙·바닥)
 const ANCHOR = {cx: 725, bottom: 946, middle: 576}; // middle = 불투명 영역의 세로 중심(공중회전 축)
 const BOUNDS: Record<Expression, {cx: number; bottom: number}> = {
 	neutral: {cx: 725, bottom: 946},
@@ -32,11 +43,6 @@ const BOUNDS: Record<Expression, {cx: number; bottom: number}> = {
 };
 const ALL: Expression[] = ['neutral', 'happy', 'surprised', 'laugh', 'curious'];
 
-const CHAR_W = 1080;
-const K = CHAR_W / SRC_W;
-const CHAR_H = SRC_H * K;
-const GROUND_Y = 900;
-const CENTER_X = 960;
 
 const Background: React.FC<{frame: number}> = ({frame}) => {
 	const idx = sceneIndexAt(frame);
@@ -70,28 +76,43 @@ const Label: React.FC<{frame: number}> = ({frame}) => {
 	const {fps} = useVideoConfig();
 	const idx = sceneIndexAt(frame);
 	const scene = SCENES[idx];
-	const enter = spring({frame: frame - scene.from - 4, fps, config: {damping: 12, stiffness: 180}});
+	const enter = spring({frame: frame - scene.from - 3, fps, config: {damping: 11, stiffness: 190}});
+	// 피날레 착지 순간에는 이름표를 치워 화면을 비운다
+	const leave = interpolate(frame, [FINALE_HIT - 4, FINALE_HIT + 4], [1, 0], {
+		extrapolateLeft: 'clamp',
+		extrapolateRight: 'clamp',
+	});
 	return (
 		<div
 			style={{
 				position: 'absolute',
-				left: 80,
-				top: 70,
-				padding: '14px 30px',
-				borderRadius: 999,
-				background: 'rgba(255,255,255,0.85)',
-				color: '#2B2B3A',
-				fontFamily: '"Arial Rounded MT Bold", "Helvetica Neue", Arial, sans-serif',
-				fontWeight: 900,
-				fontSize: 44,
-				letterSpacing: 2,
-				boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
-				transform: `translateX(${(1 - enter) * -60}px) scale(${0.6 + 0.4 * enter})`,
-				opacity: enter,
+				left: 0,
+				right: 0,
+				top: GROUND_Y + 250, // 바닥 아래 빈 공간(세로 영상 자막 자리)
+				display: 'flex',
+				justifyContent: 'center',
+				opacity: enter * leave,
 			}}
 		>
-			<span style={{opacity: 0.4, marginRight: 14}}>{String(idx + 1).padStart(2, '0')}</span>
-			{scene.label}
+			<div
+				style={{
+					display: 'flex',
+					alignItems: 'center',
+					gap: 22,
+					padding: '18px 54px 22px',
+					borderRadius: 999,
+					background: 'rgba(255,255,255,0.9)',
+					color: '#2B2B3A',
+					fontFamily: 'Jua, sans-serif',
+					fontSize: 96,
+					lineHeight: 1,
+					boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
+					transform: `translateY(${(1 - enter) * 50}px) scale(${0.6 + 0.4 * enter})`,
+				}}
+			>
+				<span style={{fontSize: 52, opacity: 0.35}}>{idx + 1}</span>
+				{scene.label}
+			</div>
 		</div>
 	);
 };
@@ -104,7 +125,7 @@ const Character: React.FC<{frame: number}> = ({frame}) => {
 	const expr = expressionAt(frame);
 
 	const lift = Math.max(0, -y);
-	const shadowScale = sx / (1 + lift / 320);
+	const shadowScale = (sx * CHAR_W) / 1080 / (1 + lift / 320);
 	const shadowOpacity = 0.28 / (1 + lift / 200);
 
 	return (

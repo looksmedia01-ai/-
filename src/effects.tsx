@@ -1,4 +1,5 @@
 import {Easing, interpolate} from 'remotion';
+import {CENTER_X, GROUND_Y, H, K, W} from './layout';
 import {BEAT as B, FINALE_HIT, S, poseAt} from './timeline';
 
 // 모든 효과는 Math.random 없이 (프레임, 파티클 번호)만으로 계산한다.
@@ -21,11 +22,12 @@ const window01 = (f: number, from: number, to: number, fade = 6) =>
 
 // [시작 프레임, 세기(px)] — 전부 박 위(15프레임 배수)의 착지·놀람 순간
 const IMPACTS: [number, number][] = [
-	[S.hello + B, 22], // HELLO 첫 착지 (2박)
-	[S.hello + 2 * B, 9], // HELLO 두 번째 착지 (3박)
-	[S.surprise, 14], // 화들짝 (마디 첫 박 컷)
-	[S.surprise + B, 10], // 놀람 점프 후 착지
-	...[4, 5, 4, 6, 5, 8].map((amp, k): [number, number] => [S.laugh + (k + 1) * B, amp]), // 깡충 착지들
+	[S.basic + B, 22], // 기본: 첫 착지 (2박)
+	[S.basic + 2 * B, 9], // 기본: 두 번째 착지 (3박)
+	[S.surprise, 14], // 놀람: 화들짝 (마디 첫 박 컷)
+	[S.surprise + B, 10], // 놀람: 점프 후 착지
+	...[5, 6, 8].map((amp, k): [number, number] => [S.laugh + (k + 1) * B, amp]), // 웃음: 깡충 착지들
+	[S.sad, 6], // 울상: 풀썩 주저앉기
 	[FINALE_HIT, 30], // 피날레 쾅 (마디 첫 박)
 ];
 
@@ -44,20 +46,20 @@ export const shakeAt = (f: number) => {
 	return {x, y, rot};
 };
 
-/* ───────────────────────── 집중선 (SURPRISE) ───────────────────────── */
+/* ───────────────────────── 집중선 (놀람) ───────────────────────── */
 
 export const FocusLines: React.FC<{frame: number}> = ({frame}) => {
 	const t = frame - S.surprise;
 	const env = window01(t, 1, 2 * B + 4, 5);
 	if (env <= 0) return null;
 	const N = 72;
-	const cx = 960;
-	const cy = 500;
-	const R = 1400;
+	const cx = CENTER_X;
+	const cy = GROUND_Y - 330;
+	const R = 2200;
 	const step = Math.floor(frame / 2); // 2프레임마다 선 배치가 바뀌며 지글거림
 	const lines = Array.from({length: N}, (_, i) => {
 		const ang = ((i + spread(i, step) * 0.6) / N) * Math.PI * 2;
-		const inner = 470 + 170 * spread(i, step + 3) - 60 * env;
+		const inner = 500 + 170 * spread(i, step + 3) - 60 * env;
 		const half = (0.004 + 0.009 * spread(i, step + 7)) * Math.PI;
 		const p = (r: number, d: number) =>
 			`${cx + Math.cos(ang + d) * r},${cy + Math.sin(ang + d) * r}`;
@@ -65,8 +67,8 @@ export const FocusLines: React.FC<{frame: number}> = ({frame}) => {
 	});
 	return (
 		<svg
-			width={1920}
-			height={1080}
+			width={W}
+			height={H}
 			style={{position: 'absolute', inset: 0, opacity: env * 0.6}}
 		>
 			<path d={lines.join(' ')} fill="#2B2340" />
@@ -74,7 +76,7 @@ export const FocusLines: React.FC<{frame: number}> = ({frame}) => {
 	);
 };
 
-/* ───────────────────────── 비구름 (HMM?) ───────────────────────── */
+/* ───────────────────────── 비구름 (울상) ───────────────────────── */
 
 const CLOUD_PUFFS: [number, number, number][] = [
 	[-150, 20, 70],
@@ -87,26 +89,30 @@ const CLOUD_PUFFS: [number, number, number][] = [
 ];
 
 export const RainCloud: React.FC<{frame: number}> = ({frame}) => {
-	const t = frame - S.hmm;
+	const t = frame - S.sad;
 	if (t < 0 || t > 4 * B + 2) return null;
+	// 두 캐릭터 머리 바로 위로 들어와 비를 뿌리고, 장면 끝에 위로 빠진다
+	const SCALE = 1.5;
 	const cx =
-		interpolate(t, [0, 12], [2250, 1500], {...clamp, easing: Easing.out(Easing.cubic)}) +
-		interpolate(t, [3 * B + 3, 4 * B + 2], [0, 800], {...clamp, easing: Easing.in(Easing.cubic)});
-	const cy = 190 + 7 * Math.sin(t * 0.22);
+		interpolate(t, [0, 12], [W + 400, CENTER_X + 20], {...clamp, easing: Easing.out(Easing.cubic)}) +
+		7 * Math.sin(t * 0.22);
+	const cy =
+		GROUND_Y - 760 -
+		interpolate(t, [3 * B + 3, 4 * B + 2], [0, 900], {...clamp, easing: Easing.in(Easing.cubic)});
 	const rain = window01(t, 8, 3 * B + 9, 5);
-	const bottom = cy + 80;
-	const ground = 905;
+	const bottom = cy + 80 * SCALE;
+	const ground = GROUND_Y + 5;
 	const fall = ground - bottom;
 
-	const drops = Array.from({length: 22}, (_, i) => {
-		const dx = -180 + (360 * (i + 0.5)) / 22 + 14 * (spread(i) - 0.5);
-		const speed = 30 + 6 * spread(i, 2);
+	const drops = Array.from({length: 30}, (_, i) => {
+		const dx = (-180 + (360 * (i + 0.5)) / 30 + 14 * (spread(i) - 0.5)) * SCALE * 1.1;
+		const speed = 36 + 8 * spread(i, 2);
 		const d = (t * speed + spread(i, 5) * fall) % fall; // 구름 아래에서 땅까지 반복
 		return {x: cx + dx - d * 0.12, y: bottom + d, d, i};
 	});
 
 	return (
-		<svg width={1920} height={1080} style={{position: 'absolute', inset: 0}}>
+		<svg width={W} height={H} style={{position: 'absolute', inset: 0}}>
 			{rain > 0 &&
 				drops.map(({x, y, d, i}) => {
 					const nearGround = d > fall - 26;
@@ -137,7 +143,7 @@ export const RainCloud: React.FC<{frame: number}> = ({frame}) => {
 						/>
 					);
 				})}
-			<g transform={`translate(${cx}, ${cy})`}>
+			<g transform={`translate(${cx}, ${cy}) scale(${SCALE})`}>
 				{CLOUD_PUFFS.map(([x, y, r], i) => (
 					<circle key={`s${i}`} cx={x} cy={y + 14} r={r} fill="#6C7487" />
 				))}
@@ -150,19 +156,19 @@ export const RainCloud: React.FC<{frame: number}> = ({frame}) => {
 	);
 };
 
-/* ───────────────────────── Zzz (HAPPY) ───────────────────────── */
+/* ───────────────────────── Zzz (눈감음) ───────────────────────── */
 
 export const Zzz: React.FC<{frame: number}> = ({frame}) => {
-	const t = frame - S.happy;
-	if (t < B || t > 8 * B) return null;
+	const t = frame - S.closed;
+	if (t < B || t >= 4 * B) return null;
 	const pose = poseAt(frame);
 	// 두 캐릭터 머리 사이 위쪽에서 피어오른다 (몸을 따라 움직임)
-	const ax = 960 + pose.x + 170;
-	const ay = 900 + pose.y - 540 * pose.stretch;
+	const ax = CENTER_X + pose.x + 150;
+	const ay = GROUND_Y + pose.y - 760 * K * pose.stretch;
 	const LIFE = 42;
 	const items = [];
 	// 2박째부터 매 박마다 Z 하나씩
-	for (let k = 0; B + k * B <= 6 * B; k++) {
+	for (let k = 0; B + k * B <= 3 * B; k++) {
 		const born = B + k * B;
 		const a = t - born;
 		if (a < 0 || a > LIFE) continue;
@@ -173,8 +179,8 @@ export const Zzz: React.FC<{frame: number}> = ({frame}) => {
 				key={k}
 				style={{
 					position: 'absolute',
-					left: ax + 200 * p + 22 * Math.sin(a * 0.25 + k),
-					top: ay - 240 * p,
+					left: ax + 160 * p + 22 * Math.sin(a * 0.25 + k),
+					top: ay - 300 * p,
 					fontFamily: '"Arial Rounded MT Bold", "Helvetica Neue", Arial, sans-serif',
 					fontWeight: 900,
 					fontSize: 70 + 80 * p,
@@ -192,7 +198,7 @@ export const Zzz: React.FC<{frame: number}> = ({frame}) => {
 	return <>{items}</>;
 };
 
-/* ───────────────────────── 색종이 (TA-DA!) ───────────────────────── */
+/* ───────────────────────── 색종이 (피날레) ───────────────────────── */
 
 const CONFETTI_COLORS = ['#FF5D73', '#FFC93C', '#3CC8FF', '#6BE08A', '#B07CFF', '#FF8A3D'];
 
@@ -201,19 +207,19 @@ export const Confetti: React.FC<{frame: number}> = ({frame}) => {
 	if (a0 < 0) return null;
 	const N = 150;
 	return (
-		<svg width={1920} height={1080} style={{position: 'absolute', inset: 0}}>
+		<svg width={W} height={H} style={{position: 'absolute', inset: 0}}>
 			{Array.from({length: N}, (_, i) => {
 				const left = i % 2 === 0;
 				const delay = Math.floor(spread(i, 1) * 6);
 				const a = a0 - delay;
 				if (a < 0) return null;
-				const x0 = left ? 60 : 1860;
-				const deg = (left ? -62 : -118) + (spread(i, 2) - 0.5) * 50;
-				const speed = 34 + 34 * spread(i, 3);
+				const x0 = left ? 40 : W - 40;
+				const deg = (left ? -72 : -108) + (spread(i, 2) - 0.5) * 40;
+				const speed = 50 + 40 * spread(i, 3);
 				const rad = (deg * Math.PI) / 180;
 				const drag = (1 - Math.exp(-0.045 * a)) / 0.045;
 				const x = x0 + Math.cos(rad) * speed * drag + 30 * Math.sin(a * 0.15 + i);
-				const y = 1100 + Math.sin(rad) * speed * drag + 0.15 * a * a;
+				const y = H + 20 + Math.sin(rad) * speed * drag + 0.15 * a * a;
 				const spin = i * 47 + a * (8 + 10 * spread(i, 4)) * (i % 3 === 0 ? -1 : 1);
 				const flutter = Math.cos(a * (0.25 + 0.2 * spread(i, 5)) + i);
 				const w = 24 + 16 * spread(i, 6);
@@ -255,14 +261,14 @@ const Drop: React.FC<{
 // 웃음 눈물: 양쪽 눈꼬리에서 바깥으로 포물선을 그리며 뿜어져 나온다
 const tears = (f: number) => {
 	const t = f - S.laugh;
-	if (t < 2 || t > 8 * B - 2) return [];
+	if (t < 2 || t > 4 * B - 2) return [];
 	const EYES = [
 		{x: 262, y: 585, dir: -1},
 		{x: 1252, y: 590, dir: 1},
 	];
 	const LIFE = 16;
 	const out = [];
-	for (let k = 0; k * 3 + 2 <= 8 * B - 18; k++) {
+	for (let k = 0; k * 3 + 2 <= 4 * B - 14; k++) {
 		const born = 2 + k * 3;
 		const a = t - born;
 		if (a < 0 || a > LIFE) continue;
@@ -288,11 +294,50 @@ const tears = (f: number) => {
 	return out;
 };
 
-// 땀방울: 톡 튀어나와 관자놀이를 타고 천천히 흘러내린다
-const SWEAT: {from: number; to: number; x: number; y: number}[] = [
+// 울상 눈물: 네 눈 밑에서 볼을 타고 줄줄 흘러내린다 (2프레임마다 한 방울)
+const sadTears = (f: number) => {
+	const t = f - S.sad;
+	if (t < 4 || t > 4 * B) return [];
+	const EYES = [
+		{x: 315, y: 640, dir: -1},
+		{x: 590, y: 615, dir: 1},
+		{x: 905, y: 665, dir: -1},
+		{x: 1210, y: 665, dir: 1},
+	];
+	const LIFE = 18;
+	const out = [];
+	for (let k = 0; 4 + k * 2 <= 4 * B - 2; k++) {
+		const born = 4 + k * 2;
+		const a = t - born;
+		if (a < 0 || a > LIFE) continue;
+		for (const [e, eye] of EYES.entries()) {
+			const vx = (0.8 + 1.2 * spread(k, e + 9)) * eye.dir;
+			const g = 0.9;
+			out.push(
+				<Drop
+					key={`sad${k}-${e}`}
+					x={eye.x + vx * a}
+					y={eye.y + 2 * a + 0.5 * g * a * a}
+					r={17 * (1 - (a / LIFE) * 0.3)}
+					opacity={interpolate(a, [0, 2, LIFE - 5, LIFE], [0, 1, 1, 0], clamp)}
+					fill="#8FD8FF"
+					stroke="#3D9BE0"
+				/>,
+			);
+		}
+	}
+	return out;
+};
+
+// 땀방울: 톡 튀어나와 관자놀이를 타고 천천히 흘러내린다 (r = 크기)
+const SWEAT: {from: number; to: number; x: number; y: number; r?: number}[] = [
 	{from: S.surprise + B + 1, to: S.surprise + 4 * B - 2, x: 210, y: 420}, // 놀람 착지 후 회색
 	{from: S.surprise + B + 4, to: S.surprise + 4 * B - 2, x: 1330, y: 460}, // 놀람 착지 후 파랑
-	{from: S.hmm + 2 * B, to: S.hmm + 4 * B - 2, x: 1335, y: 440}, // HMM? 갸웃할 때 파랑
+	// 땀: 박마다 하나씩 늘어나는 진땀 (1·2·3·4박)
+	{from: S.sweat + 2, to: S.sweat + 4 * B + 6, x: 205, y: 410, r: 40},
+	{from: S.sweat + B, to: S.sweat + 4 * B + 6, x: 1335, y: 450, r: 40},
+	{from: S.sweat + 2 * B, to: S.sweat + 4 * B + 6, x: 470, y: 300, r: 28},
+	{from: S.sweat + 3 * B, to: S.sweat + 4 * B + 6, x: 1180, y: 340, r: 30},
 ];
 
 const sweat = (f: number) =>
@@ -310,7 +355,7 @@ const sweat = (f: number) =>
 				key={`sweat${i}`}
 				x={s.x}
 				y={s.y + slide}
-				r={34 * pop}
+				r={(s.r ?? 34) * pop}
 				opacity={fade}
 				fill="#B8E6FF"
 				stroke="#4AA8E0"
@@ -330,6 +375,7 @@ export const CharacterFx: React.FC<{frame: number; width: number; height: number
 		style={{position: 'absolute', inset: 0, overflow: 'visible'}}
 	>
 		{tears(frame)}
+		{sadTears(frame)}
 		{sweat(frame)}
 	</svg>
 );
